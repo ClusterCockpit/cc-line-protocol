@@ -705,9 +705,6 @@ func (d *Decoder) takeEsc(set *byteSet, escapeTable *[256]byte) ([]byte, int, er
 	charBits := byte(0)
 outer:
 	for {
-		//if !d.ensure(1) {
-		//	break
-		//}
 		buf := d.buf[d.r1:]
 		if len(buf) < 1 && !d.ensure1(1) {
 			break
@@ -801,7 +798,11 @@ func (d *Decoder) reset() {
 		d.buf = d.buf[:unread]
 	}
 	d.r0 = d.r1
-	d.escBuf = d.escBuf[:0]
+	if cap(d.escBuf) > 1<<20 {
+		d.escBuf = make([]byte, 0, 512)
+	} else {
+		d.escBuf = d.escBuf[:0]
+	}
 }
 
 // advance advances the read point by n.

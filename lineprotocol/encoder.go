@@ -81,6 +81,20 @@ func (e *Encoder) Reset() {
 	e.SetBuffer(e.buf[:0])
 }
 
+// SetBufferHint pre-allocates the internal buffer to at least n bytes
+// capacity. This avoids repeated buffer growth when the approximate
+// output size is known in advance.
+func (e *Encoder) SetBufferHint(n int) {
+	if cap(e.buf) < n {
+		e.buf = make([]byte, 0, n)
+	} else {
+		e.buf = e.buf[:0]
+	}
+	e.pointIndex = 0
+	e.ClearErr()
+	e.section = measurementSection
+}
+
 // SetLax sets whether the Encoder methods check fully for validity or not.
 // When Lax is true:
 //

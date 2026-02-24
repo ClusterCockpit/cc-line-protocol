@@ -307,7 +307,8 @@ func (v Value) Kind() ValueKind {
 
 // String returns the value as it would be encoded in a line-protocol entry.
 func (v Value) String() string {
-	return string(v.AppendBytes(nil))
+	var buf [64]byte
+	return string(v.AppendBytes(buf[:0]))
 }
 
 // AppendTo appends the encoded value of v to buf.
