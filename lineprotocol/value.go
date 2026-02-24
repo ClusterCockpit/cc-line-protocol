@@ -33,7 +33,7 @@ var (
 )
 
 // MustNewValue is like NewValue except that it panics on failure.
-func MustNewValue(x interface{}) Value {
+func MustNewValue(x any) Value {
 	v, ok := NewValue(x)
 	if !ok {
 		panic(fmt.Errorf("invalid value for NewValue: %T (%#v)", x, x))
@@ -136,7 +136,7 @@ func newValueFromBytes(kind ValueKind, data []byte, checkUTF8 bool) (Value, erro
 // NewValue will fail and return false if x isn't a recognized
 // type or if it's a non-finite float64, or if a string or byte slice contains
 // invalid utf-8.
-func NewValue(x interface{}) (Value, bool) {
+func NewValue(x any) (Value, bool) {
 	switch x := x.(type) {
 	case int64:
 		return IntValue(x), true
@@ -264,7 +264,7 @@ func (v Value) BoolV() bool {
 // Interface returns the value as an interface. The returned value
 // will have a different dynamic type depending on the value kind;
 // one of int64 (Int), uint64 (Uint), float64 (Float), string (String), bool (Bool).
-func (v Value) Interface() interface{} {
+func (v Value) Interface() any {
 	switch v.Kind() {
 	case Int:
 		return v.IntV()

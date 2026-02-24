@@ -24,7 +24,7 @@ type TagKeyValue struct {
 
 type FieldKeyValue struct {
 	Key   string
-	Value interface{}
+	Value any
 	Error string
 }
 

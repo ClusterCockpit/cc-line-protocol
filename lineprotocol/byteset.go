@@ -1,6 +1,6 @@
 package lineprotocol
 
-// newByteset returns a set representation
+// newByteSet returns a set representation
 // of the bytes in the given string.
 func newByteSet(s string) *byteSet {
 	var set byteSet
@@ -14,39 +14,42 @@ func newByteSetRange(i0, i1 uint8) *byteSet {
 	var set byteSet
 	for i := i0; i <= i1; i++ {
 		set.set(i)
-
 	}
 	return &set
 }
 
-type byteSet [256]bool
+// byteSet is a compact bitset representing a set of byte values.
+// It uses 32 bytes ([4]uint64) instead of 256 bytes ([256]bool).
+type byteSet [4]uint64
 
-// holds reports whether b holds the byte x.
+// get reports whether x is in the set.
 func (b *byteSet) get(x uint8) bool {
-	return b[x]
+	return b[x/64]&(1<<(x%64)) != 0
 }
 
 // set ensures that x is in the set.
 func (b *byteSet) set(x uint8) {
-	b[x] = true
+	b[x/64] |= 1 << (x % 64)
 }
 
 // union returns the union of b and b1.
 func (b *byteSet) union(b1 *byteSet) *byteSet {
-	r := *b
-	for i := range r {
-		r[i] = r[i] || b1[i]
+	return &byteSet{
+		b[0] | b1[0],
+		b[1] | b1[1],
+		b[2] | b1[2],
+		b[3] | b1[3],
 	}
-	return &r
 }
 
-// union returns the union of b and b1.
+// intersect returns the intersection of b and b1.
 func (b *byteSet) intersect(b1 *byteSet) *byteSet {
-	r := *b
-	for i := range r {
-		r[i] = r[i] && b1[i]
+	return &byteSet{
+		b[0] & b1[0],
+		b[1] & b1[1],
+		b[2] & b1[2],
+		b[3] & b1[3],
 	}
-	return &r
 }
 
 func (b *byteSet) without(b1 *byteSet) *byteSet {
@@ -55,9 +58,10 @@ func (b *byteSet) without(b1 *byteSet) *byteSet {
 
 // invert returns everything not in b.
 func (b *byteSet) invert() *byteSet {
-	r := *b
-	for i := range r {
-		r[i] = !r[i]
+	return &byteSet{
+		^b[0],
+		^b[1],
+		^b[2],
+		^b[3],
 	}
-	return &r
 }

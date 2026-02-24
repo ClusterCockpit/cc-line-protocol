@@ -15,6 +15,7 @@ func main() {
 }
 
 func verify(dec *lineprotocol.Decoder) (ok bool) {
+	ok = true
 	logErr := func(err error) {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		ok = false

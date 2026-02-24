@@ -12,7 +12,7 @@ var parseValueTests = []struct {
 	kind            ValueKind
 	data            string
 	expectError     string
-	expectInterface interface{}
+	expectInterface any
 	expectString    string
 }{{
 	testName:        "int",
@@ -145,7 +145,7 @@ func TestValueCreation(t *testing.T) {
 // but not as valid Values.
 var newValueInvalidTests = []struct {
 	testName string
-	value    interface{}
+	value    any
 }{{
 	testName: "NaN",
 	value:    math.NaN(),

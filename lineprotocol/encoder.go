@@ -94,9 +94,29 @@ func (e *Encoder) SetLax(lax bool) {
 	e.lax = lax
 }
 
+// EncodeError represents an error when encoding a line-protocol entry.
+type EncodeError struct {
+	// Line holds the one-based index of the point where the error occurred.
+	Line int
+	// Err holds the underlying error.
+	Err error
+}
+
+// Error implements the error interface.
+func (e *EncodeError) Error() string {
+	if e.Line <= 0 {
+		return e.Err.Error()
+	}
+	return fmt.Sprintf("encoding point %d: %s", e.Line, e.Err.Error())
+}
+
+// Unwrap implements error unwrapping.
+func (e *EncodeError) Unwrap() error {
+	return e.Err
+}
+
 // Err returns the first encoding error that's been encountered so far,
-// if any.
-// TODO define a type so that we can get access to the line where it happened.
+// if any. The returned error will be of type *EncodeError.
 func (e *Encoder) Err() error {
 	return e.err
 }
@@ -225,10 +245,6 @@ func (e *Encoder) AddField(key string, value Value) {
 
 // AddFieldRaw is like AddField except that the key is represented
 // as a byte slice instead of a string, which can save allocations.
-// TODO would it be better for this to be:
-//	AddFieldRaw(key []byte, kind ValueKind, data []byte) error
-// so that we could respect lax and be more efficient when reading directly
-// from a Decoder?
 func (e *Encoder) AddFieldRaw(key []byte, value Value) {
 	e.AddField(unsafeBytesToString(key), value)
 }
@@ -271,13 +287,12 @@ func (e *Encoder) EndLine(t time.Time) {
 	e.buf = append(e.buf, '\n')
 }
 
-func (e *Encoder) setErrorf(format string, arg ...interface{}) {
+func (e *Encoder) setErrorf(format string, arg ...any) {
 	e.lineHasError = true
 	if e.err == nil {
-		if e.pointIndex <= 1 {
-			e.err = fmt.Errorf(format, arg...)
-		} else {
-			e.err = fmt.Errorf("encoding point %d: %w", e.pointIndex-1, fmt.Errorf(format, arg...))
+		e.err = &EncodeError{
+			Line: e.pointIndex - 1,
+			Err:  fmt.Errorf(format, arg...),
 		}
 	}
 	// Remove the partially encoded part of the current line.
@@ -302,10 +317,6 @@ func validMeasurementOrKey(s string) bool {
 			return false
 		}
 	}
-	//lint:ignore S1008 Leave my comment alone!
-	if s[len(s)-1] == '\\' {
-		// A trailing backslash can't be round-tripped.
-		return false
-	}
-	return true
+	// A trailing backslash can't be round-tripped.
+	return s[len(s)-1] != '\\'
 }

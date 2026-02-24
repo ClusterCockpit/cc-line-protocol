@@ -2,7 +2,6 @@ package lineprotocol
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -41,10 +40,5 @@ func parseBoolBytes(s []byte) (byte, error) {
 // It is unsafe, and is intended to prepare input to short-lived functions
 // that require strings.
 func unsafeBytesToString(data []byte) string {
-	dataHeader := (*reflect.SliceHeader)(unsafe.Pointer(&data))
-	var str string
-	stringHeader := (*reflect.StringHeader)(unsafe.Pointer(&str))
-	stringHeader.Data = dataHeader.Data
-	stringHeader.Len = dataHeader.Len
-	return str
+	return unsafe.String(unsafe.SliceData(data), len(data))
 }

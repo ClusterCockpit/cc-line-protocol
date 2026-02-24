@@ -1,0 +1,16 @@
+.PHONY: test vet lint build clean
+
+test:
+	go test -v ./...
+
+vet:
+	go vet ./...
+
+lint: vet
+	staticcheck ./...
+
+build:
+	go build ./...
+
+clean:
+	go clean ./...

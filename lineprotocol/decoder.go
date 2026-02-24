@@ -90,9 +90,12 @@ type Decoder struct {
 
 	// err holds any non-EOF error that was returned from rd.
 	err error
+
+	// maxBufSize holds the maximum buffer size. Zero means unlimited.
+	maxBufSize int
 }
 
-// NewDecoder returns a decoder that splits the line-protocol text
+// NewDecoderWithBytes returns a decoder that splits the line-protocol text
 // inside buf.
 func NewDecoderWithBytes(buf []byte) *Decoder {
 	return &Decoder{
@@ -111,6 +114,13 @@ func NewDecoder(r io.Reader) *Decoder {
 		section: endSection,
 		line:    1,
 	}
+}
+
+// SetMaxBufferSize sets the maximum internal buffer size in bytes.
+// If a line exceeds this size, the decoder will return an error.
+// Zero (the default) means unlimited.
+func (d *Decoder) SetMaxBufferSize(n int) {
+	d.maxBufSize = n
 }
 
 // Next advances to the next entry, and reports whether there is an
@@ -837,12 +847,18 @@ func (d *Decoder) readMore() {
 	if n < minRead {
 		// We need to grow the buffer. Note that we don't have to copy
 		// the unused part of the buffer (d.buf[:d.r0]).
-		// TODO provide a way to limit the maximum size that
-		// the buffer can grow to.
 		used := len(d.buf) - d.r0
 		n1 := cap(d.buf) * 2
 		if n1-used < minGrow {
 			n1 = used + minGrow
+		}
+		if d.maxBufSize > 0 && n1 > d.maxBufSize {
+			if used >= d.maxBufSize {
+				d.complete = true
+				d.err = fmt.Errorf("line-protocol line exceeds maximum buffer size (%d bytes)", d.maxBufSize)
+				return
+			}
+			n1 = d.maxBufSize
 		}
 		buf1 := make([]byte, used, n1)
 		copy(buf1, d.buf[d.r0:])
@@ -863,7 +879,7 @@ func (d *Decoder) readMore() {
 
 // syntaxErrorf records a syntax error at the given offset from d.r0
 // and the using the given fmt.Sprintf-formatted message.
-func (d *Decoder) syntaxErrorf(offset int, f string, a ...interface{}) error {
+func (d *Decoder) syntaxErrorf(offset int, f string, a ...any) error {
 	// Note: we only ever reset the buffer at the end of an entry,
 	// so we can assume that d.r0 corresponds to column 1.
 	buf := d.buf[d.r0 : d.r0+offset]
