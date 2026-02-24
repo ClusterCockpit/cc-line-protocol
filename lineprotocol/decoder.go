@@ -81,7 +81,13 @@ type Decoder struct {
 	// to return the values that we're decoding.
 	skipping bool
 
-	// escBuf holds a buffer for unescaped characters.
+	// ownsBuf indicates whether we own the buffer and can modify it in-place
+	// for unescaping. This is true for reader-based decoders (where we
+	// allocate the buffer) and false for NewDecoderWithBytes (user's buffer).
+	ownsBuf bool
+
+	// escBuf is a fallback buffer for unescaping when we don't own the main
+	// buffer (NewDecoderWithBytes). It is nil for reader-based decoders.
 	escBuf []byte
 
 	// line holds the line number corresponding to the
@@ -109,10 +115,10 @@ func NewDecoderWithBytes(buf []byte) *Decoder {
 // NewDecoder returns a decoder that reads from the given reader.
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{
-		rd:      r,
-		escBuf:  make([]byte, 0, 512),
-		section: endSection,
-		line:    1,
+		rd:       r,
+		ownsBuf:  true,
+		section:  endSection,
+		line:     1,
 	}
 }
 
@@ -696,12 +702,21 @@ func (d *Decoder) takeEsc(set *byteSet, escapeTable *[256]byte) ([]byte, int, er
 	// when the buffer is grown.
 	start := d.r1 - d.r0
 
-	// startUnesc holds the offset from t0 of the start of the most recent
+	// startUnesc holds the offset from r0 of the start of the most recent
 	// unescaped segment.
 	startUnesc := start
 
-	// startEsc holds the index into r.escBuf of the start of the escape buffer.
+	// w holds the write cursor (offset from r0) for in-place unescaping.
+	// Only used when d.ownsBuf is true. Unescaping always shrinks
+	// (2 bytes -> 1), so w <= read position always.
+	w := start
+
+	// startEsc holds the index into d.escBuf at the start of this call.
+	// Only used when d.ownsBuf is false.
 	startEsc := len(d.escBuf)
+
+	escaped := false
+	escNewlines := int64(0)
 	charBits := byte(0)
 outer:
 	for {
@@ -741,9 +756,21 @@ outer:
 				continue
 			}
 			if !d.skipping {
-				d.escBuf = append(d.escBuf, d.buf[d.r0+startUnesc:d.r1+i]...)
-				d.escBuf = append(d.escBuf, replc)
+				if d.ownsBuf {
+					// In-place unescaping: write directly into d.buf.
+					w += copy(d.buf[d.r0+w:], d.buf[d.r0+startUnesc:d.r1+i])
+					d.buf[d.r0+w] = replc
+					w++
+				} else {
+					// Fallback: accumulate into escBuf (user's buffer, can't modify).
+					d.escBuf = append(d.escBuf, d.buf[d.r0+startUnesc:d.r1+i]...)
+					d.escBuf = append(d.escBuf, replc)
+				}
 				startUnesc = d.r1 - d.r0 + i + 2
+				escaped = true
+				if replc == '\n' {
+					escNewlines++
+				}
 			}
 			i++
 		}
@@ -752,14 +779,19 @@ outer:
 		d.r1 += len(buf)
 	}
 	taken := d.buf[d.r0+start : d.r1]
-	if set.get('\n') {
-		d.line += int64(bytes.Count(taken, newlineBytes))
+	if escaped && !d.skipping {
+		if d.ownsBuf {
+			// Copy trailing unescaped segment and narrow taken to unescaped result.
+			w += copy(d.buf[d.r0+w:], d.buf[d.r0+startUnesc:d.r1])
+			taken = d.buf[d.r0+start : d.r0+w]
+		} else {
+			// Append trailing unescaped segment to escBuf.
+			d.escBuf = append(d.escBuf, d.buf[d.r0+startUnesc:d.r1]...)
+			taken = d.escBuf[startEsc:]
+		}
 	}
-	if len(d.escBuf) > startEsc {
-		// We've got an unescaped result: append any remaining unescaped bytes
-		// and return the relevant portion of the escape buffer.
-		d.escBuf = append(d.escBuf, d.buf[startUnesc+d.r0:d.r1]...)
-		taken = d.escBuf[startEsc:]
+	if set.get('\n') {
+		d.line += int64(bytes.Count(taken, newlineBytes)) - escNewlines
 	}
 	// Fast-path check for valid UTF-8 - if no high bit is set,
 	// then it can't be invalid UTF-8.
@@ -782,7 +814,7 @@ func (d *Decoder) at(i int) byte {
 	return 0
 }
 
-// reset discards all the data up to d.r1 and data in d.escBuf
+// reset discards all the data up to d.r1
 func (d *Decoder) reset() {
 	if unread := len(d.buf) - d.r1; unread == 0 {
 		// No bytes in the buffer, so we can start from the beginning without
@@ -798,10 +830,13 @@ func (d *Decoder) reset() {
 		d.buf = d.buf[:unread]
 	}
 	d.r0 = d.r1
-	if cap(d.escBuf) > 1<<20 {
-		d.escBuf = make([]byte, 0, 512)
-	} else {
-		d.escBuf = d.escBuf[:0]
+	if !d.ownsBuf {
+		// Reset the fallback escape buffer used for non-owned buffers.
+		if cap(d.escBuf) > 1<<20 {
+			d.escBuf = make([]byte, 0, 512)
+		} else {
+			d.escBuf = d.escBuf[:0]
+		}
 	}
 }
 
