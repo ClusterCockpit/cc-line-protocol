@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/influxdata/line-protocol/v2/lineprotocol"
+	"github.com/ClusterCockpit/cc-line-protocol/v2/lineprotocol"
 )
 
 func main() {

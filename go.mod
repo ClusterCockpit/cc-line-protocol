@@ -1,6 +1,6 @@
-module github.com/influxdata/line-protocol/v2
+module github.com/ClusterCockpit/cc-line-protocol/v2
 
-go 1.21
+go 1.24
 
 require (
 	github.com/frankban/quicktest v1.13.0

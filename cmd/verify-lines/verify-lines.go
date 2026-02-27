@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/influxdata/line-protocol/v2/lineprotocol"
+	"github.com/ClusterCockpit/cc-line-protocol/v2/lineprotocol"
 )
 
 func main() {}
@@ -17,6 +17,7 @@ func main() {}
 // It will continue to decode and verify all lines even after encountering
 // an error. The line immediately after an error may verify but not be
 // what was intended.
+//
 //export verifyLines
 func verifyLines(lines *C.char) C.int {
 	dec := lineprotocol.NewDecoderWithBytes([]byte(C.GoString(lines)))
